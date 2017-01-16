@@ -29,8 +29,9 @@ def year_fract(d1, d2):
         return result / days_in_year(d2.year)
     else:
         result = d2.year - d1.year - 1
-        result += (date(d1.year, 12, 31) - d1).days / days_in_year(d1.year)
-        result += (d2 - date(d2.year, 1, 1)).days / days_in_year(d2.year)
+        result += (date(d1.year, 12, 31) - d1).days /\
+            days_in_year(d1.year)
+        result += ((d2 - date(d2.year, 1, 1)).days + 1) / days_in_year(d2.year)
         return max(result, 0)
 
 
