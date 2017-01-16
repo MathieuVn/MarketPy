@@ -74,7 +74,7 @@ class TestVanillaOption(unittest.TestCase):
             r=0.05,
             div=0.05
         )
-        self.assertEqual(round(c.bs_price(), 4), 13.7480)
+        self.assertEqual(round(c.bs_price(), 5), 13.74804)
 
     def test_put_with_div(self):
         p = VanillaOption(
@@ -87,7 +87,55 @@ class TestVanillaOption(unittest.TestCase):
             r=0.05,
             div=0.05
         )
-        self.assertEqual(round(p.bs_price(), 4), 11.9384)
+        self.assertEqual(round(p.bs_price(), 5), 11.93836)
+
+    def test_first_order_greeks_call(self):
+        c = VanillaOption(
+            type='call',
+            spot=102,
+            strike=100,
+            value_date=date(2013, 1, 1),
+            maturity=date(2014, 1, 1),
+            volatility=0.25,
+            r=0.05
+        )
+        res = dict(
+            Delta=0.65697,
+            Gamma=0.01442,
+            Theta1=-7.35702,
+            Theta2=-0.02919,
+            Vega=0.37500,
+            Rho=0.53390
+        )
+        self.assertEqual(
+            {k: round(v, 5) for k, v in c.bs_greeks().items()
+             if k in res.keys()},
+            res
+        )
+
+    def test_first_order_greeks_put(self):
+        c = VanillaOption(
+            type='put',
+            spot=102,
+            strike=100,
+            value_date=date(2013, 1, 1),
+            maturity=date(2014, 1, 1),
+            volatility=0.25,
+            r=0.05
+        )
+        res = dict(
+            Delta=-0.34303,
+            Gamma=0.01442,
+            Theta1=-2.60088,
+            Theta2=-0.01032,
+            Vega=0.37500,
+            Rho=-0.41733
+        )
+        self.assertEqual(
+            {k: round(v, 5) for k, v in c.bs_greeks().items()
+             if k in res.keys()},
+            res
+        )
 
 
 if __name__ == '__main__':

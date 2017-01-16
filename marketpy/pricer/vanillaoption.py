@@ -10,7 +10,7 @@ Vanilla Options pricer
 """
 
 from datetime import date
-from numpy import log, exp
+from numpy import log, exp, pi
 from scipy.stats import norm
 
 from marketpy.pricer.utils import year_fract
@@ -46,15 +46,15 @@ class VanillaOption(object):
                               year_fract(self.value_date, self.maturity))
         self.option_type = kwargs.get('type', 'call')
         self.option_style = kwargs.get('style', 'european')
-        self.strike = kwargs.get('strike', 100)
-        self.spot = kwargs.get('spot', 100)
-        self.volatility = kwargs.get('volatility', 0.20)
-        self.interest_rate = kwargs.get('r', 0.05)
-        self.dividend_yield = kwargs.get('div', 0)
-        self._a = self.volatility * self.ttm**0.5
-        self._d1 = (log(self.spot / self.strike) +
-                    (self.interest_rate - self.dividend_yield +
-                     self.volatility**2 / 2) * self.ttm) / self._a
+        self.K = kwargs.get('strike', 100)
+        self.S = kwargs.get('spot', 100)
+        self.vol = kwargs.get('volatility', 0.20)
+        self.r = kwargs.get('r', 0.05)
+        self.q = kwargs.get('div', 0)
+        self._a = self.vol * self.ttm ** 0.5
+        self._d1 = (log(self.S / self.K) +
+                    (self.r - self.q +
+                     self.vol ** 2 / 2) * self.ttm) / self._a
         self._d2 = self._d1 - self._a
 
     def bs_price(self):
@@ -64,13 +64,13 @@ class VanillaOption(object):
         """
         if self.option_style == 'european':
             if self.option_type == 'call':
-                return (self.spot * exp(- self.dividend_yield * self.ttm) *
-                        norm.cdf(self._d1) - norm.cdf(self._d2) * self.strike *
-                        exp(- self.interest_rate * self.ttm))
+                return (self.S * exp(- self.q * self.ttm) *
+                        norm.cdf(self._d1) - norm.cdf(self._d2) * self.K *
+                        exp(- self.r * self.ttm))
             else:
-                return (-self.spot * exp(- self.dividend_yield * self.ttm) *
+                return (-self.S * exp(- self.q * self.ttm) *
                         norm.cdf(-self._d1) + norm.cdf(-self._d2) *
-                        self.strike * exp(- self.interest_rate * self.ttm))
+                        self.K * exp(- self.r * self.ttm))
         else:
             # American options are not supported
             return 0
@@ -78,7 +78,108 @@ class VanillaOption(object):
     def bs_greeks(self):
         """Greeks from Black-Scholes-Merton model for european options.
 
-        :return: list of greeks [Delta, Gamma, Vega, Theta]
-        :rtype: list
+        :return: dict of greeks [Delta, Gamma, Vega, Theta]
+        :rtype: dict
         """
-        pass
+        result = {}
+        if self.option_type == 'call':
+            result['Delta'] = exp(-self.q * self.ttm) * norm.cdf(self._d1)
+
+            result['Theta1'] = - exp(-self.q * self.ttm) * (
+                self.S * norm.pdf(self._d1) * self.vol
+            ) / (2 * self.ttm**0.5) - self.r * self.K * exp(
+                -self.r * self.ttm
+            ) * norm.cdf(self._d2) + self.q * self.S * exp(
+                -self.q * self.ttm
+            ) * norm.cdf(self._d1)
+
+            result['Theta2'] = 1 / 252 * (
+                - ((self.S * self.vol * exp(
+                    - self.q * self.ttm
+                )) / (2 * self.ttm**0.5) * norm.pdf(self._d1)) -
+                self.r * self.K *
+                exp(-self.r * self.ttm) * norm.cdf(self._d2) +
+                self.q * self.S * exp(
+                    - self.q * self.ttm
+                ) * norm.cdf(self._d1)
+            )
+
+            result['Rho'] = 0.01 * self.K * self.ttm * exp(
+                - self.r * self.ttm
+            ) * norm.cdf(self._d2)
+
+            result['Charm'] = self.q * exp(-self.q * self.ttm) *\
+                norm.cdf(self._d1) - exp(-self.q * self.ttm) *\
+                norm.pdf(self._d1) * (
+                2 * (self.r - self.q) * self.ttm - self._d2 * self._a
+            ) / (2 * self.ttm * self._a)
+        elif self.option_type == 'put':
+            result['Delta'] = -exp(-self.q * self.ttm) * \
+                              norm.cdf(-self._d1)
+
+            result['Theta1'] = - exp(-self.q * self.ttm) * (
+                self.S * norm.pdf(self._d1) * self.vol
+            ) / (2 * self.ttm**0.5) + self.r * self.K * exp(
+                -self.r * self.ttm
+            ) * norm.cdf(-self._d2) - self.q * self.S * exp(
+                -self.q * self.ttm
+            ) * norm.cdf(-self._d1)
+
+            result['Theta2'] = 1 / 252 * (
+                - ((self.S * self.vol * exp(
+                    - self.q * self.ttm
+                )) / (2 * self.ttm ** 0.5) * norm.pdf(self._d1)) + self.r *
+                self.K * exp(
+                    -self.r * self.ttm
+                ) * norm.cdf(-self._d2) - self.q * self.S *
+                exp(- self.q * self.ttm) * norm.cdf(-self._d1)
+            )
+
+            result['Rho'] = - 0.01 * self.K * self.ttm * exp(
+                - self.r * self.ttm
+            ) * norm.cdf(-self._d2)
+
+            result['Charm'] = -self.q * exp(-self.q * self.ttm) *\
+                norm.cdf(-self._d1) - exp(-self.q * self.ttm) *\
+                norm.pdf(self._d1) * (
+                2 * (self.r - self.q) * self.ttm - self._d2 * self._a
+            ) / (2 * self.ttm * self._a)
+
+        result['Gamma'] = exp(-self.q * self.ttm) / (
+            self.S * self.vol * self.ttm ** 0.5
+        ) * norm.pdf(self._d1)
+
+        result['Vega'] = 0.01 * self.S * exp(
+            -self.q * self.ttm
+        ) * self.ttm**0.5 * norm.pdf(self._d1)
+
+        result['Vanna'] = -exp(-self.q * self.ttm) * norm.pdf(self._d1) *\
+            self._d2 / self.vol
+
+        result['Vomma'] = result['Vega'] * (self._d1 * self._d2) / self.vol
+
+        result['Speed'] = -result['Gamma'] / self.S * (
+            self._d1 / self._a + 1
+        )
+
+        result['Zomma'] = result['Gamma'] *\
+            (self._d1 * self._d2 - 1) / self.vol
+
+        result['Color'] = -exp(-self.q * self.ttm) * norm.pdf(self._d1) / (
+            2 * self.S * self.ttm * self._a
+        ) * (2 * self.q * self.ttm + 1 + (
+            2 * (self.r - self.q) * self.ttm - self._d2 * self._a
+        ) / self._a * self._d1)
+
+        result['Veta'] = self.S * exp(-self.q * self.ttm) *\
+            norm.pdf(self._d1) * self.ttm**0.5 * (
+            self.q + ((self.r - self.q) * self._d1) / self._a - (
+                1 + self._d1 * self._d2
+            ) / (2 * self.ttm)
+        )
+
+        result['Ultima'] = -result['Vega'] / self.vol**2 * (
+            self._d1 * self._d2 * (1 - self._d1 * self._d2) +
+            self._d1**2 + self._d2**2
+        )
+        return result
