@@ -10,7 +10,7 @@ Vanilla Options pricer
 """
 
 from datetime import date
-from numpy import log, exp, pi
+from numpy import log, exp
 from scipy.stats import norm
 
 from marketpy.pricer.utils import year_fract
