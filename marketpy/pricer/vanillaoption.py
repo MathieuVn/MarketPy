@@ -15,6 +15,8 @@ from scipy.stats import norm
 
 from marketpy.pricer.utils import year_frac
 
+__all__ = ['VanillaOption']
+
 
 class VanillaOption(object):
 
@@ -78,108 +80,210 @@ class VanillaOption(object):
     def bs_greeks(self):
         """Greeks from Black-Scholes-Merton model for european options.
 
-        :return: dict of greeks [Delta, Gamma, Vega, Theta]
+        :List of greeks:
+
+            - Delta
+            - Gamma
+            - Vega
+            - Theta1
+            - Theta2
+            - Rho
+            - Vanna
+            - Vomma
+            - Charm
+            - Speed
+            - Zomma
+            - Color
+            - Veta
+            - Ultima
+
+        :return: dict of greeks [Delta, Gamma, Vega, Theta,...]
         :rtype: dict
         """
-        result = {}
-        if self.option_type == 'call':
-            result['Delta'] = exp(-self.q * self.ttm) * norm.cdf(self._d1)
+        result = dict(
+            Delta=self._bs_delta(),
+            Gamma=self._bs_gamma(),
+            Vega=self._bs_vega(),
+            Theta1=self._bs_theta1(),
+            Theta2=self._bs_theta2(),
+            Rho=self._bs_rho(),
+            Vanna=self._bs_vanna(),
+            Vomma=self._bs_vomma(),
+            Charm=self._bs_charm(),
+            Speed=self._bs_speed(),
+            Zomma=self._bs_zomma(),
+            Color=self._bs_color(),
+            Veta=self._bs_veta(),
+            Ultima=self._bs_ultima()
+        )
+        return result
 
-            result['Theta1'] = - exp(-self.q * self.ttm) * (
+    def _bs_delta(self):
+        """Compute delta from BSM model.
+
+        :rtype: float or None
+        """
+        if self.option_type == 'call':
+            return exp(-self.q * self.ttm) * norm.cdf(self._d1)
+        elif self.option_type == 'put':
+            return -exp(-self.q * self.ttm) * norm.cdf(-self._d1)
+        else:
+            return None
+
+    def _bs_gamma(self):
+        """Compute gamma from BSM model.
+
+        :rtype: float
+        """
+        gamma = exp(-self.q * self.ttm) / (
+            self.S * self.vol * self.ttm ** 0.5
+        ) * norm.pdf(self._d1)
+        return gamma
+
+    def _bs_vega(self):
+        """Compute vega from BSM model
+
+        :rtype: float
+        """
+        vega = 0.01 * self.S * exp(
+            -self.q * self.ttm
+        ) * self.ttm ** 0.5 * norm.pdf(self._d1)
+        return vega
+
+    def _bs_theta1(self):
+        """Compute the theta from BSM model.
+
+        :rtype: float or None
+        """
+        if self.option_type == 'call':
+            theta1 = -exp(-self.q * self.ttm) * (
                 self.S * norm.pdf(self._d1) * self.vol
             ) / (2 * self.ttm**0.5) - self.r * self.K * exp(
                 -self.r * self.ttm
             ) * norm.cdf(self._d2) + self.q * self.S * exp(
                 -self.q * self.ttm
             ) * norm.cdf(self._d1)
-
-            result['Theta2'] = 1 / 252 * (
-                - ((self.S * self.vol * exp(
-                    - self.q * self.ttm
-                )) / (2 * self.ttm**0.5) * norm.pdf(self._d1)) -
-                self.r * self.K *
-                exp(-self.r * self.ttm) * norm.cdf(self._d2) +
-                self.q * self.S * exp(
-                    - self.q * self.ttm
-                ) * norm.cdf(self._d1)
-            )
-
-            result['Rho'] = 0.01 * self.K * self.ttm * exp(
-                - self.r * self.ttm
-            ) * norm.cdf(self._d2)
-
-            result['Charm'] = self.q * exp(-self.q * self.ttm) *\
-                norm.cdf(self._d1) - exp(-self.q * self.ttm) *\
-                norm.pdf(self._d1) * (
-                2 * (self.r - self.q) * self.ttm - self._d2 * self._a
-            ) / (2 * self.ttm * self._a)
         elif self.option_type == 'put':
-            result['Delta'] = -exp(-self.q * self.ttm) * \
-                              norm.cdf(-self._d1)
-
-            result['Theta1'] = - exp(-self.q * self.ttm) * (
+            theta1 = -exp(-self.q * self.ttm) * (
                 self.S * norm.pdf(self._d1) * self.vol
             ) / (2 * self.ttm**0.5) + self.r * self.K * exp(
                 -self.r * self.ttm
             ) * norm.cdf(-self._d2) - self.q * self.S * exp(
                 -self.q * self.ttm
             ) * norm.cdf(-self._d1)
+        else:
+            theta1 = None
+        return theta1
 
-            result['Theta2'] = 1 / 252 * (
-                - ((self.S * self.vol * exp(
-                    - self.q * self.ttm
-                )) / (2 * self.ttm ** 0.5) * norm.pdf(self._d1)) + self.r *
-                self.K * exp(
-                    -self.r * self.ttm
-                ) * norm.cdf(-self._d2) - self.q * self.S *
-                exp(- self.q * self.ttm) * norm.cdf(-self._d1)
-            )
+    def _bs_theta2(self, days_period=252):
+        """Compute the theta adjusted from BSM model.
 
-            result['Rho'] = - 0.01 * self.K * self.ttm * exp(
+        :param days_period: Number of days a period (usually a year)
+        :type days_period: int
+        :rtype: float or None
+        """
+        return 1 / days_period * self._bs_theta1()
+
+    def _bs_rho(self):
+        """Compute rho from BSM model.
+
+        :rtype: float or None
+        """
+        if self.option_type == 'call':
+            rho = 0.01 * self.K * self.ttm * exp(
+                - self.r * self.ttm
+            ) * norm.cdf(self._d2)
+        elif self.option_type == 'put':
+            rho = -0.01 * self.K * self.ttm * exp(
                 - self.r * self.ttm
             ) * norm.cdf(-self._d2)
+        else:
+            rho = None
+        return rho
 
-            result['Charm'] = -self.q * exp(-self.q * self.ttm) *\
+    def _bs_vanna(self):
+        """Compute vanna from BSM model.
+
+        :rtype: float
+        """
+        vanna = -exp(-self.q * self.ttm) * norm.pdf(self._d1) *\
+            self._d2 / self.vol
+        return vanna
+
+    def _bs_vomma(self):
+        """Compute vomma from BSM model.
+
+        :rtype: float
+        """
+        return self._bs_vega() * (self._d1 * self._d2) / self.vol
+
+    def _bs_charm(self):
+        """Compute charm from BSM model.
+
+        :rtype: float or None
+        """
+        if self.option_type == 'call':
+            charm = self.q * exp(-self.q * self.ttm) * \
+                norm.cdf(self._d1) - exp(-self.q * self.ttm) * \
+                norm.pdf(self._d1) * (
+                    2 * (self.r - self.q) * self.ttm - self._d2 * self._a
+                ) / (2 * self.ttm * self._a)
+        elif self.option_type == 'put':
+            charm = -self.q * exp(-self.q * self.ttm) *\
                 norm.cdf(-self._d1) - exp(-self.q * self.ttm) *\
                 norm.pdf(self._d1) * (
-                2 * (self.r - self.q) * self.ttm - self._d2 * self._a
-            ) / (2 * self.ttm * self._a)
+                    2 * (self.r - self.q) * self.ttm - self._d2 * self._a
+                ) / (2 * self.ttm * self._a)
+        else:
+            charm = None
+        return charm
 
-        result['Gamma'] = exp(-self.q * self.ttm) / (
-            self.S * self.vol * self.ttm ** 0.5
-        ) * norm.pdf(self._d1)
+    def _bs_speed(self):
+        """Compute speed from BSM model.
 
-        result['Vega'] = 0.01 * self.S * exp(
-            -self.q * self.ttm
-        ) * self.ttm**0.5 * norm.pdf(self._d1)
+        :rtype: float
+        """
+        return -self._bs_gamma() / self.S * (self._d1 / self._a + 1)
 
-        result['Vanna'] = -exp(-self.q * self.ttm) * norm.pdf(self._d1) *\
-            self._d2 / self.vol
+    def _bs_zomma(self):
+        """Compute zomma from BSM model.
 
-        result['Vomma'] = result['Vega'] * (self._d1 * self._d2) / self.vol
+        :rtype: float
+        """
+        return self._bs_gamma() * (self._d1 * self._d2 - 1) / self.vol
 
-        result['Speed'] = -result['Gamma'] / self.S * (
-            self._d1 / self._a + 1
-        )
+    def _bs_color(self):
+        """Compute color from BSM model.
 
-        result['Zomma'] = result['Gamma'] *\
-            (self._d1 * self._d2 - 1) / self.vol
-
-        result['Color'] = -exp(-self.q * self.ttm) * norm.pdf(self._d1) / (
+        :rtype: float
+        """
+        color = -exp(-self.q * self.ttm) * norm.pdf(self._d1) / (
             2 * self.S * self.ttm * self._a
         ) * (2 * self.q * self.ttm + 1 + (
             2 * (self.r - self.q) * self.ttm - self._d2 * self._a
         ) / self._a * self._d1)
+        return color
 
-        result['Veta'] = self.S * exp(-self.q * self.ttm) *\
+    def _bs_veta(self):
+        """Compute veta from BSM model.
+
+        :rtype: float
+        """
+        veta = self.S * exp(-self.q * self.ttm) *\
             norm.pdf(self._d1) * self.ttm**0.5 * (
             self.q + ((self.r - self.q) * self._d1) / self._a - (
                 1 + self._d1 * self._d2
             ) / (2 * self.ttm)
         )
+        return veta
 
-        result['Ultima'] = -result['Vega'] / self.vol**2 * (
+    def _bs_ultima(self):
+        """Compute ultima from BSM model.
+
+        :rtype: float
+        """
+        ultima = -self._bs_vega() / self.vol**2 * (
             self._d1 * self._d2 * (1 - self._d1 * self._d2) +
             self._d1**2 + self._d2**2
         )
-        return result
+        return ultima
