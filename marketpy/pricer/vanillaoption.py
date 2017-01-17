@@ -13,7 +13,7 @@ from datetime import date
 from numpy import log, exp
 from scipy.stats import norm
 
-from marketpy.pricer.utils import year_fract
+from marketpy.pricer.utils import year_frac
 
 
 class VanillaOption(object):
@@ -43,7 +43,7 @@ class VanillaOption(object):
             date.today().replace(date.today().year + 1)
         )
         self.ttm = kwargs.get('ttm',
-                              year_fract(self.value_date, self.maturity))
+                              year_frac(self.value_date, self.maturity))
         self.option_type = kwargs.get('type', 'call')
         self.option_style = kwargs.get('style', 'european')
         self.K = kwargs.get('strike', 100)

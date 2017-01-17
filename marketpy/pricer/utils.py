@@ -13,7 +13,7 @@ from datetime import date
 from calendar import isleap
 
 
-def year_fract(d1, d2):
+def year_frac(d1, d2):
     """Return the difference between the dates d1 and d2
     in fractions of years.
     Returns zero for d1 is after of equal to d2.
