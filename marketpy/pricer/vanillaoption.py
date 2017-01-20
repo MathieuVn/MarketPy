@@ -50,9 +50,23 @@ class VanillaOption(object):
         self.option_style = kwargs.get('style', 'european')
         self.K = kwargs.get('strike', 100)
         self.S = kwargs.get('spot', 100)
-        self.vol = kwargs.get('volatility', 0.20)
+        self.vol = kwargs.get('volatility', 0.2)
         self.r = kwargs.get('r', 0.05)
         self.q = kwargs.get('div', 0)
+        self._update_parameters()
+
+    def set_vol(self, new_vol):
+        """Update the volatilty and compute the paramters.
+
+        :param new_vol: New volatility
+        :type new_vol: float
+        """
+        self.vol = new_vol
+        self._update_parameters()
+
+    def _update_parameters(self):
+        """Update the parameters (d1, d2, etc...).
+        """
         self._a = self.vol * self.ttm ** 0.5
         self._d1 = (log(self.S / self.K) +
                     (self.r - self.q +
@@ -287,3 +301,34 @@ class VanillaOption(object):
             self._d1**2 + self._d2**2
         )
         return ultima
+
+    def bs_implied_volatility(self, price, bounds=[0, 4], digits=5):
+        """
+
+        :param price:
+        :param bounds:
+        :param digits:
+        :return:
+        """
+        # Save the original volatility
+        _vol = self.vol
+
+        # Init
+        a = bounds[0]
+        b = bounds[1]
+        self.set_vol((a + b) / 2)
+        count = 0
+        cur_price = self.bs_price()
+
+        while round(cur_price, digits) != round(price, digits) and count < 500:
+            count += 1
+            if cur_price < price:
+                a = self.vol
+            else:
+                b = self.vol
+            self.set_vol((a + b) / 2)
+            cur_price = self.bs_price()
+
+        implied_vol = self.vol
+        self.vol = _vol
+        return implied_vol
