@@ -79,14 +79,11 @@ class VanillaOption(object):
         :rtype: float
         """
         if self.option_style == 'european':
-            if self.option_type == 'call':
-                return (self.S * exp(- self.q * self.ttm) *
-                        norm.cdf(self._d1) - norm.cdf(self._d2) * self.K *
-                        exp(- self.r * self.ttm))
-            else:
-                return (-self.S * exp(- self.q * self.ttm) *
-                        norm.cdf(-self._d1) + norm.cdf(-self._d2) *
-                        self.K * exp(- self.r * self.ttm))
+            _opt = self._get_opt()
+            return _opt * (self.S * exp(- self.q * self.ttm) *
+                           norm.cdf(_opt * self._d1) -
+                           norm.cdf(_opt * self._d2) * self.K *
+                           exp(- self.r * self.ttm))
         else:
             # American options are not supported
             return 0
@@ -135,14 +132,10 @@ class VanillaOption(object):
     def _bs_delta(self):
         """Compute delta from BSM model.
 
-        :rtype: float or None
+        :rtype: float
         """
-        if self.option_type == 'call':
-            return exp(-self.q * self.ttm) * norm.cdf(self._d1)
-        elif self.option_type == 'put':
-            return -exp(-self.q * self.ttm) * norm.cdf(-self._d1)
-        else:
-            return None
+        _opt = self._get_opt()
+        return _opt * (exp(-self.q * self.ttm) * norm.cdf(_opt * self._d1))
 
     def _bs_gamma(self):
         """Compute gamma from BSM model.
@@ -167,27 +160,16 @@ class VanillaOption(object):
     def _bs_theta1(self):
         """Compute the theta from BSM model.
 
-        :rtype: float or None
+        :rtype: float
         """
-        if self.option_type == 'call':
-            theta1 = -exp(-self.q * self.ttm) * (
-                self.S * norm.pdf(self._d1) * self.vol
-            ) / (2 * self.ttm**0.5) - self.r * self.K * exp(
-                -self.r * self.ttm
-            ) * norm.cdf(self._d2) + self.q * self.S * exp(
-                -self.q * self.ttm
-            ) * norm.cdf(self._d1)
-        elif self.option_type == 'put':
-            theta1 = -exp(-self.q * self.ttm) * (
-                self.S * norm.pdf(self._d1) * self.vol
-            ) / (2 * self.ttm**0.5) + self.r * self.K * exp(
-                -self.r * self.ttm
-            ) * norm.cdf(-self._d2) - self.q * self.S * exp(
-                -self.q * self.ttm
-            ) * norm.cdf(-self._d1)
-        else:
-            theta1 = None
-        return theta1
+        _opt = self._get_opt()
+        return -exp(-self.q * self.ttm) * (
+            self.S * norm.pdf(self._d1) * self.vol
+        ) / (2 * self.ttm**0.5) - _opt * self.r * self.K * exp(
+            -self.r * self.ttm
+        ) * norm.cdf(_opt * self._d2) + _opt * self.q * self.S * exp(
+            -self.q * self.ttm
+        ) * norm.cdf(_opt * self._d1)
 
     def _bs_theta2(self, days_period=252):
         """Compute the theta adjusted from BSM model.
@@ -201,19 +183,12 @@ class VanillaOption(object):
     def _bs_rho(self):
         """Compute rho from BSM model.
 
-        :rtype: float or None
+        :rtype: float
         """
-        if self.option_type == 'call':
-            rho = 0.01 * self.K * self.ttm * exp(
-                - self.r * self.ttm
-            ) * norm.cdf(self._d2)
-        elif self.option_type == 'put':
-            rho = -0.01 * self.K * self.ttm * exp(
-                - self.r * self.ttm
-            ) * norm.cdf(-self._d2)
-        else:
-            rho = None
-        return rho
+        _opt = self._get_opt()
+        return _opt * 0.01 * self.K * self.ttm * exp(
+            - self.r * self.ttm
+        ) * norm.cdf(_opt * self._d2)
 
     def _bs_vanna(self):
         """Compute vanna from BSM model.
@@ -234,23 +209,14 @@ class VanillaOption(object):
     def _bs_charm(self):
         """Compute charm from BSM model.
 
-        :rtype: float or None
+        :rtype: float
         """
-        if self.option_type == 'call':
-            charm = self.q * exp(-self.q * self.ttm) * \
-                norm.cdf(self._d1) - exp(-self.q * self.ttm) * \
-                norm.pdf(self._d1) * (
-                    2 * (self.r - self.q) * self.ttm - self._d2 * self._a
-                ) / (2 * self.ttm * self._a)
-        elif self.option_type == 'put':
-            charm = -self.q * exp(-self.q * self.ttm) *\
-                norm.cdf(-self._d1) - exp(-self.q * self.ttm) *\
-                norm.pdf(self._d1) * (
-                    2 * (self.r - self.q) * self.ttm - self._d2 * self._a
-                ) / (2 * self.ttm * self._a)
-        else:
-            charm = None
-        return charm
+        _opt = self._get_opt()
+        return _opt * self.q * exp(-self.q * self.ttm) * \
+               norm.cdf(_opt * self._d1) - exp(-self.q * self.ttm) * \
+               norm.pdf(self._d1) * (
+            2 * (self.r - self.q) * self.ttm - self._d2 * self._a
+        ) / (2 * self.ttm * self._a)
 
     def _bs_speed(self):
         """Compute speed from BSM model.
@@ -332,3 +298,9 @@ class VanillaOption(object):
         implied_vol = self.vol
         self.vol = _vol
         return implied_vol
+
+    def _get_opt(self):
+        if self.option_type == 'put':
+            return -1
+        else:
+            return 1
